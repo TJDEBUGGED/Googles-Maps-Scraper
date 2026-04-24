@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Google Maps Scraper</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0b1120;
+    color: #e2e8f0;
+    min-height: 100vh;
+    padding: 28px 16px;
+  }
+
+  .container { max-width: 860px; margin: 0 auto; }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .header h1 { font-size: 1.4rem; font-weight: 700; color: #f8fafc; }
+  .header p { font-size: 0.85rem; color: #64748b; margin-top: 2px; }
+
+  .status-badge {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #64748b;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 999px;
+    padding: 6px 14px;
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #475569;
+  }
+  .status-dot.running { background: #22c55e; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  /* Cards */
+  .card {
+    background: #161f30;
+    border: 1px solid #1e3a5f33;
+    border-radius: 14px;
+    padding: 22px;
+    margin-bottom: 14px;
+  }
+  .card-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #475569;
+    margin-bottom: 16px;
+  }
+
+  /* Mode tabs */
+  .tabs {
+    display: flex;
+    background: #0b1120;
+    border-radius: 9px;
+    padding: 4px;
+    gap: 4px;
+    margin-bottom: 20px;
+  }
+  .tab {
+    flex: 1;
+    padding: 9px;
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #64748b;
+    background: transparent;
+    transition: background 0.15s, color 0.15s;
+  }
+  .tab.active { background: #1d4ed8; color: #fff; }
+  .tab:hover:not(.active) { color: #cbd5e1; }
+
+  /* Form fields */
+  .field { margin-bottom: 14px; }
+  .field label {
+    display: block;
+    font-size: 0.82rem;
+    color: #94a3b8;
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+  .field input,
+  .field textarea {
+    width: 100%;
+    background: #0b1120;
+    border: 1px solid #1e3a5f;
+    border-radius: 8px;
+    padding: 10px 13px;
+    color: #e2e8f0;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.15s;
+    font-family: inherit;
+  }
+  .field input:focus,
+  .field textarea:focus { border-color: #1d4ed8; }
+  .field textarea { resize: vertical; min-height: 88px; line-height: 1.5; }
+  .field input::placeholder,
+  .field textarea::placeholder { color: #334155; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  /* Start / Stop button */
+  .btn {
+    width: 100%;
+    padding: 13px;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    margin-top: 4px;
+  }
+  .btn:active { transform: scale(0.99); }
+  .btn-start { background: #16a34a; color: #fff; }
+  .btn-start:hover { background: #15803d; }
+  .btn-stop  { background: #dc2626; color: #fff; }
+  .btn-stop:hover  { background: #b91c1c; }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+  /* Stats row */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+  .stat {
+    background: #161f30;
+    border: 1px solid #1e3a5f33;
+    border-radius: 11px;
+    padding: 16px 12px;
+    text-align: center;
+  }
+  .stat-value { font-size: 1.6rem; font-weight: 700; color: #f1f5f9; line-height: 1; }
+  .stat-label { font-size: 0.72rem; color: #475569; margin-top: 6px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* Current query banner */
+  .query-banner {
+    background: #0d1e36;
+    border: 1px solid #1e3a5f;
+    border-radius: 9px;
+    padding: 11px 15px;
+    font-size: 0.85rem;
+    color: #64748b;
+    margin-bottom: 14px;
+    display: none;
+  }
+  .query-banner span { color: #38bdf8; font-weight: 500; }
+
+  /* Log terminal */
+  .log-wrap { position: relative; }
+  .log-box {
+    background: #060d18;
+    border: 1px solid #0f2340;
+    border-radius: 10px;
+    padding: 14px 16px;
+    height: 340px;
+    overflow-y: auto;
+    font-family: 'Courier New', 'Consolas', monospace;
+    font-size: 0.78rem;
+    line-height: 1.7;
+    scroll-behavior: smooth;
+  }
+  .log-box::-webkit-scrollbar { width: 5px; }
+  .log-box::-webkit-scrollbar-track { background: transparent; }
+  .log-box::-webkit-scrollbar-thumb { background: #1e3a5f; border-radius: 3px; }
+
+  .log-empty { color: #1e3a5f; font-style: italic; }
+  .log-line { color: #64748b; }
+  .log-query { color: #38bdf8; }
+  .log-added { color: #22c55e; }
+  .log-info  { color: #a78bfa; }
+  .log-error { color: #f87171; }
+
+  .csv-path { font-size: 0.75rem; color: #334155; margin-top: 8px; font-family: monospace; word-break: break-all; }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <h1>Google Maps Scraper</h1>
+      <p>Scrape business listings and export to CSV</p>
+    </div>
+    <div class="status-badge">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Idle</span>
+    </div>
+  </div>
+
+  <!-- Config -->
+  <div class="card">
+    <div class="card-label">Configuration</div>
+
+    <div class="tabs">
+      <button class="tab active" id="tab-single" onclick="setMode('single')">Single Search</button>
+      <button class="tab" id="tab-continuous" onclick="setMode('continuous')">Continuous Mode</button>
+    </div>
+
+    <!-- Single panel -->
+    <div id="panel-single">
+      <div class="field">
+        <label>Search Query</label>
+        <input id="inp-search" type="text" placeholder="e.g. plumbers in London" />
+      </div>
+      <div class="field">
+        <label>Max Results <span style="color:#334155;font-weight:400">(leave blank for all)</span></label>
+        <input id="inp-total-single" type="number" min="1" placeholder="e.g. 50" />
+      </div>
+    </div>
+
+    <!-- Continuous panel -->
+    <div id="panel-continuous" class="hidden">
+      <div class="field">
+        <label>Locations <span style="color:#334155;font-weight:400">(one per line)</span></label>
+        <textarea id="inp-locations" placeholder="London&#10;Manchester&#10;Birmingham&#10;Edinburgh"></textarea>
+      </div>
+      <div class="two-col">
+        <div class="field">
+          <label>Duration (minutes)</label>
+          <input id="inp-duration" type="number" min="1" placeholder="e.g. 60" />
+        </div>
+        <div class="field">
+          <label>Max Results per Query <span style="color:#334155;font-weight:400">(optional)</span></label>
+          <input id="inp-total-continuous" type="number" min="1" placeholder="e.g. 20" />
+        </div>
+      </div>
+    </div>
+
+    <button class="btn btn-start" id="mainBtn" onclick="toggleScraper()">Start Scraper</button>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-value" id="stat-queries">0</div>
+      <div class="stat-label">Queries Done</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="stat-businesses">0</div>
+      <div class="stat-label">Businesses</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="stat-time">—</div>
+      <div class="stat-label">Time Left</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="stat-rate" style="font-size:1.1rem">—</div>
+      <div class="stat-label">Per Query Avg</div>
+    </div>
+  </div>
+
+  <!-- Current query -->
+  <div class="query-banner" id="queryBanner">
+    Now searching: <span id="queryText">—</span>
+  </div>
+
+  <!-- Log -->
+  <div class="card">
+    <div class="card-label">Live Output</div>
+    <div class="log-box" id="logBox">
+      <div class="log-empty" id="logEmpty">No output yet — start the scraper above.</div>
+    </div>
+    <div class="csv-path" id="csvPath"></div>
+  </div>
+
+</div>
+
+<script>
+let mode = 'single';
+let running = false;
+let evtSrc = null;
+let pollTimer = null;
+
+// ── Mode tabs ──────────────────────────────────────────────────────────────────
+function setMode(m) {
+  mode = m;
+  document.getElementById('tab-single').classList.toggle('active', m === 'single');
+  document.getElementById('tab-continuous').classList.toggle('active', m === 'continuous');
+  document.getElementById('panel-single').classList.toggle('hidden', m !== 'single');
+  document.getElementById('panel-continuous').classList.toggle('hidden', m !== 'continuous');
+}
+
+// ── Start / Stop ───────────────────────────────────────────────────────────────
+async function toggleScraper() {
+  if (running) {
+    await fetch('/stop', { method: 'POST' });
+    return;
+  }
+
+  const btn = document.getElementById('mainBtn');
+  btn.disabled = true;
+
+  const body = { mode };
+  if (mode === 'single') {
+    body.search   = document.getElementById('inp-search').value;
+    body.total    = document.getElementById('inp-total-single').value;
+  } else {
+    body.locations = document.getElementById('inp-locations').value;
+    body.duration  = document.getElementById('inp-duration').value;
+    body.total     = document.getElementById('inp-total-continuous').value;
+  }
+
+  const res = await fetch('/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  btn.disabled = false;
+
+  if (!res.ok) {
+    const err = await res.json();
+    addLog('Error: ' + err.error, 'log-error');
+    return;
+  }
+
+  setRunning(true);
+  openStream();
+  startPolling();
+}
+
+// ── UI running state ───────────────────────────────────────────────────────────
+function setRunning(r) {
+  running = r;
+  const btn = document.getElementById('mainBtn');
+  btn.textContent = r ? 'Stop Scraper' : 'Start Scraper';
+  btn.className   = r ? 'btn btn-stop' : 'btn btn-start';
+  document.getElementById('statusDot').classList.toggle('running', r);
+  document.getElementById('statusText').textContent = r ? 'Running' : 'Idle';
+  document.getElementById('queryBanner').style.display = r ? 'block' : 'none';
+}
+
+// ── SSE log stream ─────────────────────────────────────────────────────────────
+function openStream() {
+  if (evtSrc) evtSrc.close();
+  evtSrc = new EventSource('/stream');
+  evtSrc.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg) addLog(msg);
+  };
+}
+
+// ── Status polling ─────────────────────────────────────────────────────────────
+function startPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(pollStatus, 2000);
+}
+
+async function pollStatus() {
+  try {
+    const s = await fetch('/status').then(r => r.json());
+
+    document.getElementById('stat-queries').textContent    = s.queries_done;
+    document.getElementById('stat-businesses').textContent = s.businesses_found;
+
+    if (s.seconds_left !== null && s.seconds_left !== undefined) {
+      const m   = Math.floor(s.seconds_left / 60);
+      const sec = s.seconds_left % 60;
+      document.getElementById('stat-time').textContent = `${m}:${String(sec).padStart(2, '0')}`;
+    } else {
+      document.getElementById('stat-time').textContent = '—';
+    }
+
+    const avg = s.queries_done > 0
+      ? Math.round(s.businesses_found / s.queries_done)
+      : '—';
+    document.getElementById('stat-rate').textContent = avg;
+
+    if (s.current_query) {
+      document.getElementById('queryText').textContent = s.current_query;
+    }
+    if (s.session_csv) {
+      document.getElementById('csvPath').textContent = 'CSV → ' + s.session_csv;
+    }
+
+    if (!s.running && running) {
+      setRunning(false);
+      clearInterval(pollTimer);
+      setTimeout(() => evtSrc && evtSrc.close(), 4000);
+    }
+  } catch (_) { /* server momentarily busy */ }
+}
+
+// ── Log rendering ──────────────────────────────────────────────────────────────
+function addLog(msg) {
+  const box = document.getElementById('logBox');
+  const empty = document.getElementById('logEmpty');
+  if (empty) empty.remove();
+
+  const el = document.createElement('div');
+
+  let cls = 'log-line';
+  if (msg.startsWith('[Query'))                             cls = 'log-query';
+  else if (msg.includes('+') && msg.includes('businesses')) cls = 'log-added';
+  else if (msg.startsWith('Session') || msg.startsWith('Running') || msg.startsWith('Done')) cls = 'log-info';
+  else if (/error|fatal|failed/i.test(msg))                 cls = 'log-error';
+
+  el.className  = cls;
+  el.textContent = '> ' + msg;
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+}
+
+// ── Init: load history + live status on page open ─────────────────────────────
+(async () => {
+  const [logsRes, statusRes] = await Promise.all([fetch('/logs'), fetch('/status')]);
+  const logs = await logsRes.json();
+  const s    = await statusRes.json();
+
+  logs.forEach(addLog);
+
+  document.getElementById('stat-queries').textContent    = s.queries_done;
+  document.getElementById('stat-businesses').textContent = s.businesses_found;
+  if (s.session_csv) document.getElementById('csvPath').textContent = 'CSV → ' + s.session_csv;
+
+  if (s.running) {
+    setRunning(true);
+    openStream();
+    startPolling();
+  }
+})();
+</script>
+</body>
+</html>
